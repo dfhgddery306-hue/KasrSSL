@@ -1,13 +1,20 @@
 
+
 package com.editortrue.mobile;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.webkit.*;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.JavascriptInterface;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.database.Cursor;
 import android.provider.OpenableColumns;
+
 import org.json.JSONObject;
 import java.io.*;
 import java.util.zip.ZipFile;
@@ -25,11 +32,13 @@ public class MainActivity extends Activity {
     @Override
     public void onCreate(Bundle saved) {
         super.onCreate(saved);
+
         web = new WebView(this);
         web.getSettings().setJavaScriptEnabled(true);
         web.setWebViewClient(new WebViewClient());
         web.setWebChromeClient(new WebChromeClient());
         web.addJavascriptInterface(this, "AndroidBridge");
+
         setContentView(web);
         web.loadUrl("file:///android_asset/index.html");
     }
@@ -40,100 +49,199 @@ public class MainActivity extends Activity {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
             i.setType("*/*");
+            i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "application/vnd.android.package-archive",
+                "application/zip",
+                "application/octet-stream"
+            });
             startActivityForResult(i, PICK_APK);
         });
     }
 
     @Override
-    protected void onActivityResult(int req, int res, Intent data) {
+    protected void onActivityResult(
+        int req, int res, Intent data
+    ) {
         super.onActivityResult(req, res, data);
-        if (req == PICK_APK && res == RESULT_OK && data != null) {
-            selectedUri = data.getData();
-            String name = "APK selected";
 
-            try (Cursor c = getContentResolver().query(
-                selectedUri, null, null, null, null)) {
-                if (c != null && c.moveToFirst()) {
-                    int idx = c.getColumnIndex(
-                        OpenableColumns.DISPLAY_NAME);
-                    if (idx >= 0) name = c.getString(idx);
+        if (req == PICK_APK && res == RESULT_OK
+                && data != null) {
+            selectedUri = data.getData();
+
+            String name = "Selected file";
+
+            Cursor c = getContentResolver().query(
+                selectedUri, null, null, null, null
+            );
+
+            if (c != null) {
+                try {
+                    if (c.moveToFirst()) {
+                        int idx = c.getColumnIndex(
+                            OpenableColumns.DISPLAY_NAME
+                        );
+                        if (idx >= 0) name = c.getString(idx);
+                    }
+                } finally {
+                    c.close();
                 }
-            } catch (Exception ignored) {}
+            }
 
             web.evaluateJavascript(
                 "window.setSelectedFile && window.setSelectedFile("
-                + JSONObject.quote(name) + ")", null);
+                    + JSONObject.quote(name) + ")",
+                null
+            );
+
+            analyzeSelected();
         }
     }
 
     @JavascriptInterface
     public void analyzeSelected() {
-        Uri uri = selectedUri;
+        final Uri uri = selectedUri;
+
         if (uri == null) {
-            report("اختر ملف APK أولاً");
+            sendResult(false, "اختر ملف APK أولاً");
             return;
         }
 
         executor.execute(() -> {
             File temp = null;
+
             try {
                 temp = File.createTempFile(
-                    "apk_", ".zip", getCacheDir());
+                    "apk_analysis_", ".zip", getCacheDir()
+                );
 
                 try (InputStream in =
                     getContentResolver().openInputStream(uri);
-                     OutputStream out = new FileOutputStream(temp)) {
+                     OutputStream out =
+                    new FileOutputStream(temp)) {
 
-                    if (in == null) throw new Exception("تعذر قراءة الملف");
-                    byte[] b = new byte[8192];
-                    int n;
-                    while ((n = in.read(b)) != -1) out.write(b, 0, n);
-                }
+                    if (in == null) throw new Exception(
+                        "تعذر قراءة الملف"
+                    );
 
-                int entries = 0;
-                boolean manifest = false;
-                boolean dex = false;
+                    byte[] buffer = new byte[8192];
+                    int count;
 
-                try (ZipFile zip = new ZipFile(temp)) {
-                    Enumeration<? extends java.util.zip.ZipEntry> e =
-                        zip.entries();
-                    while (e.hasMoreElements()) {
-                        String name = e.nextElement().getName();
-                        entries++;
-                        if (name.equals("AndroidManifest.xml"))
-                            manifest = true;
-                        if (name.matches("classes([0-9]+)?\\.dex"))
-                            dex = true;
+                    while ((count = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, count);
                     }
                 }
 
                 JSONObject result = new JSONObject();
                 result.put("success", true);
                 result.put("fileSize", temp.length());
-                result.put("entries", entries);
-                result.put("hasManifest", manifest);
-                result.put("hasDex", dex);
-                result.put("message",
-                    manifest && dex
-                    ? "تم فحص بنية APK بنجاح"
-                    : "لم يتم العثور على بنية APK كاملة");
 
-                String js = "window.onAnalysisResult && window.onAnalysisResult("
-                    + result.toString() + ")";
-                runOnUiThread(() -> web.evaluateJavascript(js, null));
+                boolean hasManifest = false;
+                boolean hasDex = false;
+                int entries = 0;
+                int nestedApks = 0;
+
+                try (ZipFile zip = new ZipFile(temp)) {
+                    Enumeration<? extends java.util.zip.ZipEntry> e =
+                        zip.entries();
+
+                    while (e.hasMoreElements()) {
+                        String name = e.nextElement().getName();
+                        entries++;
+
+                        if (name.equals("AndroidManifest.xml"))
+                            hasManifest = true;
+
+                        if (name.matches("classes([0-9]+)?\\.dex"))
+                            hasDex = true;
+
+                        if (name.toLowerCase().endsWith(".apk"))
+                            nestedApks++;
+                    }
+                }
+
+                result.put("entries", entries);
+                result.put("hasManifest", hasManifest);
+                result.put("hasDex", hasDex);
+                result.put("nestedApks", nestedApks);
+
+                PackageManager pm = getPackageManager();
+
+                PackageInfo info = pm.getPackageArchiveInfo(
+                    temp.getAbsolutePath(),
+                    PackageManager.GET_ACTIVITIES |
+                    PackageManager.GET_PERMISSIONS
+                );
+
+                if (info != null) {
+                    result.put("packageName", info.packageName);
+                    result.put("versionName",
+                        info.versionName == null
+                            ? "Unknown" : info.versionName
+                    );
+                    result.put("versionCode",
+                        info.getLongVersionCode()
+                    );
+
+                    if (info.applicationInfo != null) {
+                        info.applicationInfo.sourceDir =
+                            temp.getAbsolutePath();
+                        info.applicationInfo.publicSourceDir =
+                            temp.getAbsolutePath();
+
+                        result.put("appName",
+                            pm.getApplicationLabel(
+                                info.applicationInfo
+                            ).toString()
+                        );
+                    }
+                } else {
+                    result.put("packageName", "غير متاح");
+                    result.put("appName", "غير معروف");
+                }
+
+                result.put("validZip", true);
+
+                if (hasManifest && hasDex) {
+                    result.put("message",
+                        "تم فحص بنية APK بنجاح"
+                    );
+                } else if (nestedApks > 0) {
+                    result.put("message",
+                        "يبدو أنه أرشيف يحتوي على ملفات APK"
+                    );
+                } else {
+                    result.put("message",
+                        "الأرشيف لا يحتوي على بنية APK كاملة"
+                    );
+                }
+
+                sendResult(true, result.toString());
 
             } catch (Exception ex) {
-                report("فشل الفحص: " + ex.getMessage());
+                sendResult(false,
+                    "فشل الفحص: " + ex.getMessage()
+                );
             } finally {
                 if (temp != null) temp.delete();
             }
         });
     }
 
-    private void report(String message) {
-        runOnUiThread(() -> web.evaluateJavascript(
-            "window.onAnalysisResult && window.onAnalysisResult("
-            + JSONObject.quote(message) + ")", null));
+    private void sendResult(boolean success, String data) {
+        runOnUiThread(() -> {
+            try {
+                JSONObject obj = success
+                    ? new JSONObject(data)
+                    : new JSONObject().put("success", false)
+                        .put("message", data);
+
+                web.evaluateJavascript(
+                    "window.onAnalysisResult && " +
+                    "window.onAnalysisResult(" + obj + ")",
+                    null
+                );
+            } catch (Exception ignored) {}
+        });
     }
 
     @Override
