@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#070b12"><title>EDITOR TRUE</title>
+<style>
+:root{--bg:#070b12;--panel:#111a27;--panel2:#142235;--line:#254b70;--blue:#55c8ff;--blue2:#a8e8ff;--muted:#a9bacb;--green:#8fe0b1}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#edf7ff;font-family:Arial,Tahoma,sans-serif}
+header{position:sticky;top:0;background:#101827ee;border-bottom:1px solid #23435f;padding:18px 20px;z-index:2}
+.brand{font-size:27px;letter-spacing:1px;color:#fff}.sub{color:var(--muted);font-size:15px;margin-top:5px}
+main{max-width:760px;margin:auto;padding:24px 16px 50px}.eyebrow{color:var(--blue);font-weight:bold;letter-spacing:2px;font-size:13px}
+h1{font-size:29px;margin:12px 0}.intro{color:var(--muted);line-height:1.8}
+.card{background:linear-gradient(145deg,#14283b,#101a28);border:1px solid var(--line);border-radius:27px;padding:22px;margin:24px 0;box-shadow:0 10px 30px #0005}
+.filebox{display:flex;align-items:center;justify-content:space-between;gap:14px}.num,.ico{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#062036;border-radius:50%;width:52px;height:52px;display:grid;place-items:center;font-weight:bold;flex-shrink:0}
+button{border:1px solid #5d7892;border-radius:18px;padding:15px;background:transparent;color:var(--blue2);font-weight:bold;font-size:15px;cursor:pointer}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}.primary{background:linear-gradient(100deg,var(--blue),var(--blue2));color:#062036;border:0;width:100%;font-size:18px;padding:19px}
+.section{margin-top:30px}.section-title{font-size:22px;margin:12px 0 18px}.flag{display:flex;align-items:center;gap:13px;background:#111b29;border:1px solid #294967;border-radius:22px;padding:15px;margin:12px 0}
+.flag .desc{flex:1}.flag b{display:block;font-size:17px}.flag small{display:block;color:var(--muted);line-height:1.6;margin-top:5px}
+.switch{width:55px;height:30px;border-radius:20px;background:#36475a;border:1px solid #7791aa;position:relative;flex-shrink:0}.switch:after{content:"";position:absolute;width:22px;height:22px;top:3px;right:3px;border-radius:50%;background:#d8e8f4}.switch.on{background:#168bc7}.switch.on:after{right:28px;background:white}
+.progress{height:12px;background:#23384d;border-radius:10px;overflow:hidden;margin:15px 0}.progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--blue2))}
+.log{background:#050a10;color:#c6eaff;padding:14px;border-radius:12px;font:12px monospace;direction:ltr;min-height:90px;white-space:pre-wrap}
+.note{color:#ffdc8c;font-size:13px;line-height:1.7}.hidden{display:none}
+@media(max-width:420px){h1{font-size:25px}.actions{grid-template-columns:1fr}.flag{gap:9px}.flag b{font-size:15px}}
+</style></head><body>
+<header><div class="brand">EDITOR TRUE</div><div class="sub">أداة تعديل تطبيقات أندرويد</div></header>
+<main><div class="eyebrow">EDITOR TRUE / STUDIO</div><h1>جاهز لتعديل تطبيقك؟</h1><p class="intro">اختر ملفاً، حدّد الباتشات، واترك الباقي على EDITOR TRUE.</p>
+<div class="card"><div class="eyebrow">INPUT FILE</div><div class="filebox"><div><h2>📁 الملف المستهدف (APK / APKS / XAPK)</h2><p class="intro">اختر ملف التطبيق من ذاكرة الهاتف.</p></div><div class="num">01</div></div>
+<div class="actions"><button onclick="pick()">⬆️ تغيير الملف</button><button onclick="document.getElementById('fileName').textContent='لم يتم اختيار ملف'">↩ إعادة الاختيار</button></div><p id="fileName" class="intro" style="text-align:center">لم يتم اختيار ملف</p></div>
+<div class="section"><div class="eyebrow">02 / CONFIGURE WORKFLOW</div><h2 class="section-title">قائمة الخيارات المتاحة</h2><div id="flags"></div></div>
+<div class="card"><div class="eyebrow">03 / EXECUTE</div><button class="primary" onclick="start()">بدء المعالجة في الخلفية</button><p class="note">واجهة وتجربة أولية: محرك APKPatcher لم يُدمج بعد داخل Android، لذلك لن يتم تعديل ملفك في هذه النسخة.</p><div class="progress"><span id="bar"></span></div><div id="log" class="log">EDITOR TRUE جاهز. اختر ملفاً أولاً.</div></div>
+</main><script>
+const options=[
+['تجاوز فحص SSL','تجاوز فحص شهادات SSL / SSL Pinning','🔒'],
+['تجاوز SSL لتطبيقات Flutter','Flutter SSL Pinning','🦋'],
+['إصلاح التثبيت','إصلاح مشاكل التثبيت وإعادة التوقيع','🔧'],
+['منع لقطات الشاشة','خيار FLAG_SECURE','📸'],
+['تجاوز كشف VPN','NetworkCapabilities / NetworkInterface','🌐'],
+['كشف تصحيح USB','ADB enabled','🔌'],
+['إزالة الإعلانات','AdMob / Unity / AppLovin','🚫'],
+['تسجيل دخول جهاز واحد','Android ID Spoof','🪪'],
+['المحتوى المدفوع','معاينة اختبارية فقط','💎'],
+['Pine Hook (Abhi)','Abhi Loader (Xposed/LSP)','🧪'],
+['Pine Hook (My)','My Loader','🧰'],
+['تجاوز Google Play Protect','يتطلب توافقاً واختباراً خاصاً','🛡️'],
+['كشف اسم الحزمة','Manifest / Dex / Resources','📦'],
+['سجلات الخوارزميات','Algorithm Logs','📊'],
+['بدون توقيع','الاحتفاظ بالملف دون توقيع','⚠️'],
+['باتش تيليجرام','Telegram / Plus','✈️']];
+const host=document.getElementById('flags');
+options.forEach((o,i)=>{let el=document.createElement('div');el.className='flag';el.innerHTML=`<div class="switch" role="switch" aria-checked="false" tabindex="0" onclick="toggle(this)"></div><div class="desc"><b>${o[0]}</b><small>${o[1]}</small></div><div class="ico">${o[2]}</div>`;host.appendChild(el)});
+function toggle(e){e.classList.toggle('on');e.setAttribute('aria-checked',e.classList.contains('on'))}
+function pick(){if(window.AndroidBridge)AndroidBridge.chooseApk()}
+function setSelectedFile(n){document.getElementById('fileName').textContent='الملف المحدد: '+n;document.getElementById('log').textContent='تم اختيار الملف: '+n}
+function start(){document.getElementById('log').textContent='لم يتم دمج محرك المعالجة بعد. هذه نسخة واجهة أولية فقط.';document.getElementById('bar').style.width='0%'}
+</script></body></html>
